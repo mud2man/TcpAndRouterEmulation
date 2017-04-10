@@ -27,7 +27,6 @@ public class ClientServer{
         this.distanceVector = new HashMap<Integer, Double>();
         this.nextHops = new HashMap<Integer, Integer>();
         this.neighborDistanceVectors = new HashMap<Integer, HashMap<Integer, Double>>();
-        this.timeStamp = new Date();
 
         //System.out.println("[ClientServer] serverPort:" + this.serverPort);
         //System.out.println("[ClientServer] isLast:" + this.isLast);
@@ -126,7 +125,9 @@ public class ClientServer{
        
         //display the routing table 
         if(needUpdate == true){
-            System.out.println("[" + this.timeStamp.getTime() + "] " + "Node " + serverPort + " Routing Table");
+            timeStamp = new Date();
+            System.out.print("[" + timeStamp.getTime() + "] ");
+            System.out.println("Node " + serverPort + " Routing Table");
             for(Map.Entry<Integer, Double> entry : distanceVector.entrySet()){
                 if(entry.getKey() == serverPort){
                     continue;
@@ -150,7 +151,6 @@ public class ClientServer{
         DatagramPacket sendPacket;
         
         //System.out.println("[ClientServer] send msg:" + msg);
-
         sendPacket = new DatagramPacket(msg.getBytes(), msg.getBytes().length, ipAddress, port);
         socket.send(sendPacket);
     }

@@ -9,6 +9,7 @@ public class ClientServer{
     int windowSize, valN, serverPort, clientPort, windowStart, windowEnd, ackNum, expectPkt, recvAckCount, discardAckCount;
     DatagramSocket socket;
     private Thread thread;
+    Date timeStamp;
     Semaphore mutex;
 
     public ClientServer(int serverPort, int clientPort, int windowSize, double valP, int valN, boolean isProb) throws Exception{
@@ -21,6 +22,7 @@ public class ClientServer{
         this.isSend = false; 
         this.socket = new DatagramSocket(this.serverPort);
         this.mutex = new Semaphore(1);
+        this.timeStamp = new Date();
 
         //System.out.println("[ClientServer] serverPort:" + this.serverPort);
         //System.out.println("[ClientServer] clientPort:" + this.clientPort);
@@ -104,6 +106,8 @@ public class ClientServer{
                                 //System.out.println("[ClientServer] ackNum: " + ackNum);
                                 if(isDrop(++recvAckCount)){
                                     discardAckCount++;
+                                    timeStamp = new Date();
+                                    System.out.print("[" + timeStamp.getTime() + "] ");
                                     System.out.println("ACK" + recPayload.seqNum + " discarded");
                                     break;
                                 }
@@ -115,6 +119,8 @@ public class ClientServer{
                                 }
                                 windowEnd = windowStart + windowSize - 1;
                                 mutex.release();
+                                timeStamp = new Date();
+                                System.out.print("[" + timeStamp.getTime() + "] ");
                                 System.out.println("ACK" + recPayload.seqNum + " received, window moves to " + windowStart);
                                 
                                 //System.out.println("[ClientServer] waken...");
@@ -131,6 +137,8 @@ public class ClientServer{
                     case 1:
                         //send ack# and update expecting packet#
                         if(isDrop(++recvCount)){
+                            timeStamp = new Date();
+                            System.out.print("[" + timeStamp.getTime() + "] ");
                             System.out.println("packet" + recPayload.seqNum + " " + recPayload.data + " discarded");
                             dropCount++;
                             break;
@@ -140,6 +148,8 @@ public class ClientServer{
                             expectPkt++;
                         }
 
+                        timeStamp = new Date();
+                        System.out.print("[" + timeStamp.getTime() + "] ");
                         System.out.println("packet" + recPayload.seqNum + " " + recPayload.data + " received");
                         payload = new Payload();
                         payload.type = 0;
@@ -154,6 +164,8 @@ public class ClientServer{
                          
                         try{
                             ipAddress = InetAddress.getByName("localhost");
+                            timeStamp = new Date();
+                            System.out.print("[" + timeStamp.getTime() + "] ");
                             System.out.println("ACK" + payload.seqNum + " sent, expecting packet" + expectPkt);
                             send(msg, ipAddress, recPayload.port);
                         }
@@ -246,6 +258,8 @@ public class ClientServer{
             //trasmit all packets in the window
             if((System.currentTimeMillis() - prevTime) >= 500){
                 idx = this.windowStart;
+                timeStamp = new Date();
+                System.out.print("[" + timeStamp.getTime() + "] ");
                 System.out.println("packet" + idx + " timeout");
             }
             else{
@@ -260,6 +274,8 @@ public class ClientServer{
                 payload.data = msg.substring(idx, idx + 1);
                 //System.out.println("msg::::::" + msg);
                 //System.out.println("payload.data:::::" + payload.data);
+                timeStamp = new Date();
+                System.out.print("[" + timeStamp.getTime() + "] ");
                 System.out.println("packet" + payload.seqNum + " " + payload.data + " sent");
                 serialMsg = serial.serialize(payload);
                 ipAddress = InetAddress.getByName("localhost");
