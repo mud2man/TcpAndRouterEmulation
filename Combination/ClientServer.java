@@ -56,8 +56,11 @@ public class ClientServer implements Runnable{
             distanceVector.put(neighborPort, distance);
             nextHops.put(neighborPort, neighborPort);
             expectPkts.put(neighborPort, 0);
-            linkStatuss.put(neighborPort, new LinkStatus());
         } 
+        
+        for(Integer p : probeSnedees) {
+            linkStatuss.put(p, new LinkStatus());
+        }
     }
     
     public void routingTableReset(){

@@ -3,7 +3,7 @@ import java.net.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-public class ClientServer{
+public class ClientServer implements Runnable{
     int serverPort;
     boolean isLast;
     HashMap<Integer, Double> neighbors;
@@ -12,8 +12,11 @@ public class ClientServer{
     HashMap<Integer, HashMap<Integer, Double>> neighborDistanceVectors;
     DatagramSocket socket;
     private Thread thread;
-    Semaphore mutex;
     Date timeStamp;
+    private Thread lock;
+
+    public void run() {
+    }
 
     public ClientServer(int serverPort, HashMap<Integer, Double> neighbors, boolean isLast) throws Exception{
         int neighborPort;
@@ -23,10 +26,10 @@ public class ClientServer{
         this.neighbors = neighbors;
         this.isLast = isLast; 
         this.socket = new DatagramSocket(this.serverPort);
-        this.mutex = new Semaphore(1);
         this.distanceVector = new HashMap<Integer, Double>();
         this.nextHops = new HashMap<Integer, Integer>();
         this.neighborDistanceVectors = new HashMap<Integer, HashMap<Integer, Double>>();
+        this.lock = new Thread (this, "ClientServer");
 
         //System.out.println("[ClientServer] serverPort:" + this.serverPort);
         //System.out.println("[ClientServer] isLast:" + this.isLast);
@@ -61,21 +64,23 @@ public class ClientServer{
             //System.out.println("[ClientServer] Running " +  threadName);
             serial = new Serial();
             
-            for(Map.Entry<Integer, Double> entry : neighbors.entrySet()) {
-    	        neighborPort = entry.getKey();
-                payload = new Payload();
-                payload.type = 3;
-                payload.port = serverPort;
-                payload.distanceVector = distanceVector; 
-                serialMsg = serial.serialize(payload);
-                try{
-                    ipAddress = InetAddress.getByName("localhost");
-                    send(serialMsg, ipAddress, neighborPort);
-                }
-                catch(Exception e){
-                    e.printStackTrace();  
-                }
-            } 
+        synchronized(lock){
+                for(Map.Entry<Integer, Double> entry : neighbors.entrySet()) {
+                    neighborPort = entry.getKey();
+                    payload = new Payload();
+                    payload.type = 3;
+                    payload.port = serverPort;
+                    payload.distanceVector = distanceVector; 
+                    serialMsg = serial.serialize(payload);
+                    try{
+                        ipAddress = InetAddress.getByName("localhost");
+                        send(serialMsg, ipAddress, neighborPort);
+                    }
+                    catch(Exception e){
+                        e.printStackTrace();  
+                    }
+                } 
+            }
         }
        
         public void start () {
@@ -91,35 +96,37 @@ public class ClientServer{
         needUpdate = false;
         nextHop = 0;
         
-        neighborDistanceVectors.put(neighborPort, neighborDistanceVector);
-        
-        //Bellman-Ford
-        for(Map.Entry<Integer, Double> entry : neighborDistanceVector.entrySet()){
-            destination = entry.getKey();
-
-            if(destination == serverPort){
-                continue;
-            }
-
-            minDistance = Double.MAX_VALUE;
-            //scan all the neighbors to get minimum distance
-            for(Map.Entry<Integer, Double> neighbor : neighbors.entrySet()){
-                neighborPort = neighbor.getKey();
-                if(neighborDistanceVectors.containsKey(neighborPort) && 
-                   neighborDistanceVectors.get(neighborPort).containsKey(destination)){
-                    currDistance = neighbors.get(neighborPort) + neighborDistanceVectors.get(neighborPort).get(destination);
-                    currDistance = Math.round (currDistance * 100.0) / 100.0;
-                    if(currDistance < minDistance){
-                        minDistance = currDistance;
-                        nextHop = neighborPort;
+        synchronized(lock){
+            neighborDistanceVectors.put(neighborPort, neighborDistanceVector);
+            
+            //Bellman-Ford
+            for(Map.Entry<Integer, Double> entry : neighborDistanceVector.entrySet()){
+                destination = entry.getKey();
+         
+                if(destination == serverPort){
+                    continue;
+                }
+         
+                minDistance = Double.MAX_VALUE;
+                //scan all the neighbors to get minimum distance
+                for(Map.Entry<Integer, Double> neighbor : neighbors.entrySet()){
+                    neighborPort = neighbor.getKey();
+                    if(neighborDistanceVectors.containsKey(neighborPort) && 
+                       neighborDistanceVectors.get(neighborPort).containsKey(destination)){
+                        currDistance = neighbors.get(neighborPort) + neighborDistanceVectors.get(neighborPort).get(destination);
+                        currDistance = Math.round (currDistance * 100.0) / 100.0;
+                        if(currDistance < minDistance){
+                            minDistance = currDistance;
+                            nextHop = neighborPort;
+                        }
                     }
                 }
-            }
-            
-            if(!distanceVector.containsKey(destination) || distanceVector.get(destination) != minDistance){
-                distanceVector.put(destination, minDistance);
-                nextHops.put(destination, nextHop);
-                needUpdate = true;
+                
+                if(!distanceVector.containsKey(destination) || distanceVector.get(destination) != minDistance){
+                    distanceVector.put(destination, minDistance);
+                    nextHops.put(destination, nextHop);
+                    needUpdate = true;
+                }
             }
         }
        
