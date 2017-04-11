@@ -4,7 +4,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class ClientServer implements Runnable{
-    int selfPort, sendCount, ackCount, windowSize, windowStart, windowEnd, ackNum;
+    int selfPort, windowSize, windowStart, windowEnd, ackNum;
     boolean isLast;
     HashMap<Integer, Double> neighbors;
     HashMap<Integer, Double> distanceVector;
@@ -13,11 +13,18 @@ public class ClientServer implements Runnable{
     HashSet<Integer> probeSnedees;
     HashMap<Integer, Integer> expectPkts;
     DatagramSocket socket;
-    private Thread gThread;
+    private Thread lock;
     private Thread thread;
     Date timeStamp;
     boolean isCaculated;
     boolean isNeighborsUpdate;
+    
+    private class LinkStatus{
+        int sendCount, ackCount;
+        LinkStatus(){sendCount = 0; ackCount = 0;}
+    }
+
+    HashMap<Integer, LinkStatus> linkStatuss;
 
     public void run() {
     }
@@ -39,7 +46,8 @@ public class ClientServer implements Runnable{
         this.windowSize = 5;
         this.expectPkts = new HashMap<Integer, Integer>();
         this.isNeighborsUpdate = false;
-        this.gThread = new Thread (this, "ClientServer");
+        this.lock = new Thread (this, "ClientServer");
+        this.linkStatuss = new HashMap<Integer, LinkStatus>();
 
         distanceVector.put(selfPort, 0.0);
         for(Map.Entry<Integer, Double> entry : neighbors.entrySet()) {
@@ -48,6 +56,7 @@ public class ClientServer implements Runnable{
             distanceVector.put(neighborPort, distance);
             nextHops.put(neighborPort, neighborPort);
             expectPkts.put(neighborPort, 0);
+            linkStatuss.put(neighborPort, new LinkStatus());
         } 
     }
     
@@ -55,7 +64,7 @@ public class ClientServer implements Runnable{
         int neighborPort;
         double distance;
 
-        synchronized(gThread){
+        synchronized(lock){
             distanceVector = new HashMap<Integer, Double>();
             nextHops = new HashMap<Integer, Integer>();
             neighborDistanceVectors = new HashMap<Integer, HashMap<Integer, Double>>();
@@ -174,8 +183,8 @@ public class ClientServer implements Runnable{
             double lossRate;
             String serialMsg;
  
-            sendCount = 0;
-            ackCount = 0;
+            linkStatuss.get(port).sendCount = 0;
+            linkStatuss.get(port).ackCount = 0;
             ackNum = 0;
             windowStart = 0;
             windowEnd = windowStart + windowSize - 1;
@@ -185,50 +194,49 @@ public class ClientServer implements Runnable{
             
             while(true){
                 // transmition finish
-                synchronized(gThread){
+                synchronized(lock){
                    //send finished packet to neighbor
                    if(windowStart >= msg.length()){
-                       payload = new Payload();
-                       payload.type = 2;
-                       payload.port = selfPort;
-                       lossRate = (double)(sendCount - ackCount)/(double)(sendCount);
-                       lossRate = Math.round (lossRate * 100.0) / 100.0;
-                       neighbors.put(port, lossRate);
-                       isNeighborsUpdate = true;
-                       payload.distance = lossRate;
-                       serialMsg = serial.serialize(payload);
-                       ipAddress = InetAddress.getByName("localhost");
-                       send(serialMsg, ipAddress, port);
-                       break;
+                        payload = new Payload();
+                        payload.type = 2;
+                        payload.port = selfPort;
+                        lossRate = (double)(linkStatuss.get(port).sendCount - linkStatuss.get(port).ackCount) / 
+                                   (double)linkStatuss.get(port).sendCount;
+                        lossRate = Math.round (lossRate * 100.0) / 100.0;
+                        neighbors.put(port, lossRate);
+                        isNeighborsUpdate = true;
+                        payload.distance = lossRate;
+                        serialMsg = serial.serialize(payload);
+                        ipAddress = InetAddress.getByName("localhost");
+                        send(serialMsg, ipAddress, port);
+                        break;
                     }
                    
                     //trasmit all packets in the window
                     if((System.currentTimeMillis() - prevTime) >= 500){
-                       idx = windowStart;
-                       timeStamp = new Date();
+                        idx = windowStart;
                     }
                     else{
-                       idx = currPos;
+                        idx = currPos;
                     }
                    
                     for(idx = idx; (idx <= windowEnd) && (idx < msg.length()); idx++){
-                       payload = new Payload();
-                       payload.type = 1;
-                       payload.port = selfPort;
-                       payload.seqNum = idx;
-                       payload.data = msg.substring(idx, idx + 1);
-                       timeStamp = new Date();
-                       serialMsg = serial.serialize(payload);
-                       ipAddress = InetAddress.getByName("localhost");
-                       sendCount++;
-                       send(serialMsg, ipAddress, port);
+                        payload = new Payload();
+                        payload.type = 1;
+                        payload.port = selfPort;
+                        payload.seqNum = idx;
+                        payload.data = msg.substring(idx, idx + 1);
+                        serialMsg = serial.serialize(payload);
+                        ipAddress = InetAddress.getByName("localhost");
+                        linkStatuss.get(port).sendCount++;
+                        send(serialMsg, ipAddress, port);
                     }
                  
                     currPos = idx;
                    
                     //wait for timeout or window moved
                     prevTime = System.currentTimeMillis();
-                    gThread.wait(500);
+                    lock.wait(500);
                 } 
             }
         }
@@ -260,7 +268,7 @@ public class ClientServer implements Runnable{
         needUpdate = false;
         nextHop = 0;
         
-        synchronized(gThread){
+        synchronized(lock){
             if(neighborPort != selfPort){  
                 neighborDistanceVectors.put(neighborPort, neighborDistanceVector);
             }
@@ -350,17 +358,17 @@ public class ClientServer implements Runnable{
             
             while(true){
                 //wait for 5 seconds
-                System.out.println("[ClientServer] wait for 5 sec............");
+                //System.out.println("[ClientServer] wait for 5 sec............");
                 try {
                     Thread.sleep(5000);
                 } catch(InterruptedException ex) {
                     Thread.currentThread().interrupt();
                 }
                 
-                System.out.println("[ClientServer] wait for 5 sec complete..............");
+                //System.out.println("[ClientServer] wait for 5 sec complete..............");
                 
                 if(isNeighborsUpdate){
-                    dump();
+                    //dump();
                     routingTableReset();
                     broadcastThread = new BroadcastThread("Broadcast vectors on node " + Integer.toString(selfPort));
                     broadcastThread.start();
@@ -397,10 +405,53 @@ public class ClientServer implements Runnable{
         }
     }
 
+    private class LinkStatusThread implements Runnable {
+        private String threadName;
+        int neighborPort;
+        double lossRate;
+       
+        LinkStatusThread(String name){
+            threadName = name;
+            thread = new Thread (this, threadName);
+        }
+       
+        public void run() {
+            int sendCount, lostCount;
+
+            while(true){
+                //wait for 1 seconds
+                try {
+                    Thread.sleep(1000);
+                } catch(InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                }
+                
+                synchronized(lock){
+                    for(Map.Entry<Integer, LinkStatus> entry : linkStatuss.entrySet()){
+                        sendCount = entry.getValue().sendCount;
+                        lostCount = entry.getValue().sendCount -  entry.getValue().ackCount;
+                        lossRate = (double)(lostCount)/(double)(sendCount);
+                        lossRate = Math.round (lossRate * 100.0) / 100.0;
+                        timeStamp = new Date();
+                        System.out.print("[" + timeStamp.getTime() + "] ");
+                        System.out.print("Link to " + entry.getKey() + ": ");
+                        System.out.print(sendCount + " packets sent, ");
+                        System.out.print(lostCount+ " packets lost, ");
+                        System.out.println("loss rate " + lossRate);
+                    }
+                }
+            }
+        }
+       
+        public void start () {
+            thread.start ();
+        }
+    }
     public void mainLoop() throws Exception{
         BroadcastThread broadcastThread;
         ProbeThread probeThread;
         UpdateThread updateThread;
+        LinkStatusThread linkStatusThread;
         Payload recPayload, sendPayload;
         boolean needWaken;
         String msg;
@@ -413,6 +464,9 @@ public class ClientServer implements Runnable{
         recPayload = null; 
         Thread.sleep(100);
         serial = new Serial();
+
+        linkStatusThread = new LinkStatusThread("Link status polling" + Integer.toString(this.selfPort));
+        linkStatusThread.start();
 
         if(this.isLast){
             broadcastThread = new BroadcastThread("Broadcast vectors on node " + Integer.toString(this.selfPort));
@@ -436,17 +490,17 @@ public class ClientServer implements Runnable{
                 case 0:
                     //update ackNum, window info
                     try{
-                        synchronized(gThread){
+                        synchronized(lock){
                             if(recPayload.seqNum > ackNum){
                                 ackNum = recPayload.seqNum;
                                 windowStart = recPayload.seqNum + 1;
                                 needWaken = true;
                             }
                             windowEnd = windowStart + windowSize - 1;
-                            ackCount++;
+                            linkStatuss.get(recPayload.port).ackCount++;
 
                             if(needWaken){
-                                gThread.notifyAll();
+                                lock.notifyAll();
                             }
                         }
                     }
