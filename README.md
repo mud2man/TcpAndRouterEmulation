@@ -10,7 +10,7 @@ I seperated this assignment as three parts and put them into three folders, Goba
 
 2. How to run
     2.a Go-Back-N Protocol:
-        2.a.a sender: "$: java gbnnode 1111 2222 5 -p 0.5 (probabilistic mode)", or "$: java gbnnode 1111 2222 5 -p 0.5 (deterministic mode)"
+        2.a.a sender: "$: java gbnnode 1111 2222 5 -p 0.5 (probabilistic mode)", or "$: java gbnnode 1111 2222 5 -p 0.5 (deterministic mode)", and "send <message>"
         2.a.b receiver: do nothing
     2.b Distance-Vector Routing Algorithm:
         2.b.a node 1111: "$: java dvnode 1111 2222 .1 3333 .5" or "$: sh 1111_test.sh"
@@ -33,8 +33,8 @@ I seperated this assignment as three parts and put them into three folders, Goba
         value of table is the object of needed information. Of course, the needed information of client is encapsulate into an object.
 
     3.c Multi-threading
-        Worker thread are created to server parallel service. Wait(timeout) and notifyAll are used to archieve the handshake betweein sneding and 
-        receiving. Also, syncronized method are used to make atomic operation in critical region.
+        Worker thread are created to serve parallel service. Wait(timeout) and notifyAll are used to archieve the handshake betweein sneding and 
+        receiving thread. Also, syncronized method are used to make atomic operation in critical region.
 
     3.d Protocals
         The following is the self-defined message type used to communicate among nodes.
@@ -45,12 +45,12 @@ I seperated this assignment as three parts and put them into three folders, Goba
         Type3: table update => type, port, distance vector
 
 4. Test plan
-    I have shell scripts for each part which can make testing in the same machine more convient.
+    I have shell scripts for each part which can make testing in the same machine more convenient.
    
     4.a Go-Back-N Protocol
         4.a.a run "client_test.sh" in terminal#1
         4.a.b "server_test.sh" in terminal#2
-        4.a.c In terminal#1, type "send abcdef"
+        4.a.c In terminal#1, type "send abcd"
 
     4.b Go-Back-N Protocol testing result
         4.b.a terminal#1:
