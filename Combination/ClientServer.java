@@ -3,7 +3,7 @@ import java.net.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-public class ClientServer{
+public class ClientServer implements Runnable{
     int selfPort, sendCount, ackCount, windowSize, windowStart, windowEnd, ackNum;
     boolean isLast;
     HashMap<Integer, Double> neighbors;
@@ -19,6 +19,9 @@ public class ClientServer{
     Date timeStamp;
     boolean isCaculated;
     boolean isNeighborsUpdate;
+
+    public void run() {
+    }
 
     public ClientServer(int selfPort, HashMap<Integer, Double> neighbors, boolean isLast, HashSet<Integer> probeSnedees) 
     throws Exception{
@@ -38,7 +41,7 @@ public class ClientServer{
         this.windowSize = 5;
         this.expectPkts = new HashMap<Integer, Integer>();
         this.isNeighborsUpdate = false;
-        //gThread = new Thread (this, "XXXX");
+        this.gThread = new Thread (this, "ClientServer");
 
         System.out.println("[ClientServer] selfPort:" + this.selfPort);
         System.out.println("[ClientServer] isLast:" + this.isLast);
@@ -251,9 +254,9 @@ public class ClientServer{
                 currPos = idx;
                 
                 //wait for timeout or window moved
-                synchronized(thread){
+                synchronized(gThread){
                     prevTime = System.currentTimeMillis();
-                    thread.wait(500);
+                    gThread.wait(500);
                 } 
             }
             
@@ -384,13 +387,13 @@ public class ClientServer{
             System.out.println("[ClientServer] Running " +  threadName);
             serial = new Serial();
             
-            //while(true){
+            while(true){
                 //wait for 5 seconds
                 timeStamp = new Date();
                 System.out.print("[" + timeStamp.getTime() + "] ");
                 System.out.println("[ClientServer] wait for 5 sec...");
                 try {
-                    Thread.sleep(10000);
+                    Thread.sleep(5000);
                 } catch(InterruptedException ex) {
                     Thread.currentThread().interrupt();
                 }
@@ -399,14 +402,14 @@ public class ClientServer{
                 System.out.print("[" + timeStamp.getTime() + "] ");
                 System.out.println("[ClientServer] wait for 5 sec complete..............");
                 
-                dump();
-                routingTableReset();
                 if(isNeighborsUpdate){
+                    dump();
+                    routingTableReset();
                     broadcastThread = new BroadcastThread("Broadcast vectors on node " + Integer.toString(selfPort));
                     broadcastThread.start();
                     isNeighborsUpdate = false;
                 }
-            //}
+            }
         }
        
         public void start () {
@@ -477,7 +480,7 @@ public class ClientServer{
                 case 0:
                     //update ackNum, window info
                     try{
-                        synchronized(thread){
+                        synchronized(gThread){
                             //System.out.println("[ClientServer] recPayload.seqNum: " + recPayload.seqNum);
                             //System.out.println("[ClientServer] ackNum: " + ackNum);
 
@@ -497,7 +500,7 @@ public class ClientServer{
                             
                             //System.out.println("[ClientServer] waken...");
                             if(needWaken){
-                                thread.notifyAll();
+                                gThread.notifyAll();
                             }
                         }
                     }
