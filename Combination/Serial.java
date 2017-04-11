@@ -114,7 +114,7 @@ public class Serial{
         msg = msg.substring(len);
         payload.type = Integer.parseInt(subStr);
 
-        System.out.println("[Serial] type:" + payload.type);
+        //System.out.println("[Serial] type:" + payload.type);
 
         switch (payload.type){
             case 0:
@@ -184,8 +184,8 @@ public class Serial{
                 payload.distance = Double.parseDouble(subStr);
                 msg = msg.substring(len);
 
-                System.out.println("[Serial] port:" + payload.port);
-                System.out.println("[Serial] distance:" + payload.distance);
+                //System.out.println("[Serial] port:" + payload.port);
+                //System.out.println("[Serial] distance:" + payload.distance);
                 break;
             
             case 3:
@@ -216,12 +216,12 @@ public class Serial{
                     payload.distanceVector.put(port, distance);
                 }
 
-                System.out.println("[Serial] port:" + payload.port);
-                for(Map.Entry<Integer, Double> entry : payload.distanceVector.entrySet()) {
-    	            port = entry.getKey();
-                    distance = entry.getValue();
-                    System.out.println("[Serial] <" + port + ", " + distance + ">");
-                } 
+                //System.out.println("[Serial] port:" + payload.port);
+                //for(Map.Entry<Integer, Double> entry : payload.distanceVector.entrySet()) {
+    	        //    port = entry.getKey();
+                //    distance = entry.getValue();
+                //    System.out.println("[Serial] <" + port + ", " + distance + ">");
+                //} 
                 break;
 
             default:

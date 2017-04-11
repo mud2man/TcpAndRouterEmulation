@@ -15,7 +15,6 @@ public class ClientServer implements Runnable{
     DatagramSocket socket;
     private Thread gThread;
     private Thread thread;
-    Semaphore mutex;
     Date timeStamp;
     boolean isCaculated;
     boolean isNeighborsUpdate;
@@ -33,7 +32,6 @@ public class ClientServer implements Runnable{
         this.isLast = isLast;
         this.probeSnedees = probeSnedees;
         this.socket = new DatagramSocket(this.selfPort);
-        this.mutex = new Semaphore(1);
         this.distanceVector = new HashMap<Integer, Double>();
         this.nextHops = new HashMap<Integer, Integer>();
         this.neighborDistanceVectors = new HashMap<Integer, HashMap<Integer, Double>>();
@@ -43,9 +41,6 @@ public class ClientServer implements Runnable{
         this.isNeighborsUpdate = false;
         this.gThread = new Thread (this, "ClientServer");
 
-        System.out.println("[ClientServer] selfPort:" + this.selfPort);
-        System.out.println("[ClientServer] isLast:" + this.isLast);
-        System.out.println("[ClientServer] neighbors:");
         distanceVector.put(selfPort, 0.0);
         for(Map.Entry<Integer, Double> entry : neighbors.entrySet()) {
     	    neighborPort = entry.getKey();
@@ -53,37 +48,26 @@ public class ClientServer implements Runnable{
             distanceVector.put(neighborPort, distance);
             nextHops.put(neighborPort, neighborPort);
             expectPkts.put(neighborPort, 0);
-            System.out.println("[ClientServer] <" + neighborPort + ", " + distance + ">");
         } 
-        
-        System.out.println("[ClientServer] probeSnedees:");
-        for(Integer p : probeSnedees) {
-            System.out.println("[ClientServer] " + p);
-        }
     }
     
     public void routingTableReset(){
         int neighborPort;
         double distance;
 
-        try{
-            mutex.acquire();
-        }
-        catch(Exception e){
-            e.printStackTrace();  
-        }
-        distanceVector = new HashMap<Integer, Double>();
-        nextHops = new HashMap<Integer, Integer>();
-        neighborDistanceVectors = new HashMap<Integer, HashMap<Integer, Double>>();
-        
-        distanceVector.put(selfPort, 0.0);
-        for(Map.Entry<Integer, Double> entry : neighbors.entrySet()) {
-    	    neighborPort = entry.getKey();
-            distance = entry.getValue();
-            distanceVector.put(neighborPort, distance);
-            nextHops.put(neighborPort, neighborPort);
+        synchronized(gThread){
+            distanceVector = new HashMap<Integer, Double>();
+            nextHops = new HashMap<Integer, Integer>();
+            neighborDistanceVectors = new HashMap<Integer, HashMap<Integer, Double>>();
+            
+            distanceVector.put(selfPort, 0.0);
+            for(Map.Entry<Integer, Double> entry : neighbors.entrySet()) {
+                neighborPort = entry.getKey();
+                distance = entry.getValue();
+                distanceVector.put(neighborPort, distance);
+                nextHops.put(neighborPort, neighborPort);
+            }
         } 
-        mutex.release();
     }
     
     public void dump(){
@@ -122,7 +106,6 @@ public class ClientServer implements Runnable{
         
         random = Math.random();
         if(random < neighbors.get(neighborPort)){
-            //System.out.println("[ClientServer] drop...");
             return true;
         }
         else{
@@ -147,7 +130,7 @@ public class ClientServer implements Runnable{
             Serial serial;
             Payload payload;
 
-            System.out.println("[ClientServer] Running " +  threadName);
+            //System.out.println("[ClientServer] Running " +  threadName);
             serial = new Serial();
             
             for(Map.Entry<Integer, Double> entry : neighbors.entrySet()) {
@@ -202,67 +185,52 @@ public class ClientServer implements Runnable{
             
             while(true){
                 // transmition finish
-                //System.out.println("this.windowStart:" + this.windowStart + ", msg.length():" + msg.length());
-                mutex.acquire();
- 
-                //send finished packet to neighbor
-                if(windowStart >= msg.length()){
-                    payload = new Payload();
-                    payload.type = 2;
-                    payload.port = selfPort;
-                    lossRate = (double)(sendCount - ackCount)/(double)(sendCount);
-                    lossRate = Math.round (lossRate * 100.0) / 100.0;
-                    neighbors.put(port, lossRate);
-                    isNeighborsUpdate = true;
-                    payload.distance = lossRate;
-                    serialMsg = serial.serialize(payload);
-                    ipAddress = InetAddress.getByName("localhost");
-                    send(serialMsg, ipAddress, port);
-                    mutex.release();
-                    break;
-                }
-                
-                //trasmit all packets in the window
-                if((System.currentTimeMillis() - prevTime) >= 500){
-                    idx = windowStart;
-                    timeStamp = new Date();
-                    //System.out.print("[" + timeStamp.getTime() + "] ");
-                    //System.out.println("packet" + idx + " timeout");
-                }
-                else{
-                    idx = currPos;
-                }
-                
-                for(idx = idx; (idx <= windowEnd) && (idx < msg.length()); idx++){
-                    payload = new Payload();
-                    payload.type = 1;
-                    payload.port = selfPort;
-                    payload.seqNum = idx;
-                    payload.data = msg.substring(idx, idx + 1);
-                    //System.out.println("msg::::::" + msg);
-                    //System.out.println("payload.data:::::" + payload.data);
-                    timeStamp = new Date();
-                    //System.out.print("[" + timeStamp.getTime() + "] ");
-                    //System.out.println("packet" + payload.seqNum + " " + payload.data + " sent");
-                    serialMsg = serial.serialize(payload);
-                    ipAddress = InetAddress.getByName("localhost");
-                    sendCount++;
-                    send(serialMsg, ipAddress, port);
-                }
-                mutex.release();
- 
-                currPos = idx;
-                
-                //wait for timeout or window moved
                 synchronized(gThread){
+                   //send finished packet to neighbor
+                   if(windowStart >= msg.length()){
+                       payload = new Payload();
+                       payload.type = 2;
+                       payload.port = selfPort;
+                       lossRate = (double)(sendCount - ackCount)/(double)(sendCount);
+                       lossRate = Math.round (lossRate * 100.0) / 100.0;
+                       neighbors.put(port, lossRate);
+                       isNeighborsUpdate = true;
+                       payload.distance = lossRate;
+                       serialMsg = serial.serialize(payload);
+                       ipAddress = InetAddress.getByName("localhost");
+                       send(serialMsg, ipAddress, port);
+                       break;
+                    }
+                   
+                    //trasmit all packets in the window
+                    if((System.currentTimeMillis() - prevTime) >= 500){
+                       idx = windowStart;
+                       timeStamp = new Date();
+                    }
+                    else{
+                       idx = currPos;
+                    }
+                   
+                    for(idx = idx; (idx <= windowEnd) && (idx < msg.length()); idx++){
+                       payload = new Payload();
+                       payload.type = 1;
+                       payload.port = selfPort;
+                       payload.seqNum = idx;
+                       payload.data = msg.substring(idx, idx + 1);
+                       timeStamp = new Date();
+                       serialMsg = serial.serialize(payload);
+                       ipAddress = InetAddress.getByName("localhost");
+                       sendCount++;
+                       send(serialMsg, ipAddress, port);
+                    }
+                 
+                    currPos = idx;
+                   
+                    //wait for timeout or window moved
                     prevTime = System.currentTimeMillis();
                     gThread.wait(500);
                 } 
             }
-            
-            //display loss rate
-            System.out.print("[Summery] " + (sendCount - ackCount) + "/" + sendCount);
-            System.out.println(" packets discarded, loss rate = " + (lossRate * 100) + "%");
         }
 
         public void run() {
@@ -271,7 +239,7 @@ public class ClientServer implements Runnable{
             //probedistance
             for(Integer port : probeSnedees) {
                 try{
-                    tcpSend("probe", port);
+                    tcpSend("probeTest", port);
                 }
                 catch(Exception e){
                     e.printStackTrace();  
@@ -292,67 +260,62 @@ public class ClientServer implements Runnable{
         needUpdate = false;
         nextHop = 0;
         
-        try{
-            mutex.acquire();
-        }
-        catch(Exception e){
-            e.printStackTrace();  
-        }
-        if(neighborPort != selfPort){  
-            neighborDistanceVectors.put(neighborPort, neighborDistanceVector);
-        }
-        
-        //Bellman-Ford
-        for(Map.Entry<Integer, Double> entry : neighborDistanceVector.entrySet()){
-            destination = entry.getKey();
-
-            if(destination == selfPort){
-                continue;
+        synchronized(gThread){
+            if(neighborPort != selfPort){  
+                neighborDistanceVectors.put(neighborPort, neighborDistanceVector);
             }
-
-            minDistance = Double.MAX_VALUE;
-            //scan all the neighbors to get minimum distance
-            for(Map.Entry<Integer, Double> neighbor : neighbors.entrySet()){
-                neighborPort = neighbor.getKey();
-                if(neighborDistanceVectors.containsKey(neighborPort) && 
-                   neighborDistanceVectors.get(neighborPort).containsKey(destination)){
-                    currDistance = neighbors.get(neighborPort) + neighborDistanceVectors.get(neighborPort).get(destination);
-                    currDistance = Math.round (currDistance * 100.0) / 100.0;
-                    if(currDistance < minDistance){
-                        minDistance = currDistance;
-                        nextHop = neighborPort;
+            
+            //Bellman-Ford
+            for(Map.Entry<Integer, Double> entry : neighborDistanceVector.entrySet()){
+                destination = entry.getKey();
+         
+                if(destination == selfPort){
+                    continue;
+                }
+         
+                minDistance = Double.MAX_VALUE;
+                //scan all the neighbors to get minimum distance
+                for(Map.Entry<Integer, Double> neighbor : neighbors.entrySet()){
+                    neighborPort = neighbor.getKey();
+                    if(neighborDistanceVectors.containsKey(neighborPort) && 
+                       neighborDistanceVectors.get(neighborPort).containsKey(destination)){
+                        currDistance = neighbors.get(neighborPort) + neighborDistanceVectors.get(neighborPort).get(destination);
+                        currDistance = Math.round (currDistance * 100.0) / 100.0;
+                        if(currDistance < minDistance){
+                            minDistance = currDistance;
+                            nextHop = neighborPort;
+                        }
+                    }
+                }
+                
+                if(!distanceVector.containsKey(destination) || distanceVector.get(destination) != minDistance){
+                    distanceVector.put(destination, minDistance);
+                    nextHops.put(destination, nextHop);
+                    needUpdate = true;
+                }
+            }
+           
+            //display the routing table 
+            if(needUpdate == true){
+                timeStamp = new Date();
+                System.out.print("[" + timeStamp.getTime() + "] ");
+                System.out.println("Node " + selfPort + " Routing Table");
+                for(Map.Entry<Integer, Double> entry : distanceVector.entrySet()){
+                    if(entry.getKey() == selfPort){
+                        continue;
+                    }
+         
+                    System.out.print("(" + entry.getValue() + ")" + " -> Node " + entry.getKey());
+         
+                    if(nextHops.containsKey(entry.getKey()) && (entry.getKey() - nextHops.get(entry.getKey()) != 0)){
+                        System.out.println("; Next hop -> Node " + nextHops.get(entry.getKey()));
+                    }
+                    else{
+                        System.out.println("");
                     }
                 }
             }
-            
-            if(!distanceVector.containsKey(destination) || distanceVector.get(destination) != minDistance){
-                distanceVector.put(destination, minDistance);
-                nextHops.put(destination, nextHop);
-                needUpdate = true;
-            }
         }
-       
-        //display the routing table 
-        if(needUpdate == true){
-            timeStamp = new Date();
-            System.out.print("[" + timeStamp.getTime() + "] ");
-            System.out.println("Node " + selfPort + " Routing Table");
-            for(Map.Entry<Integer, Double> entry : distanceVector.entrySet()){
-                if(entry.getKey() == selfPort){
-                    continue;
-                }
-
-                System.out.print("(" + entry.getValue() + ")" + " -> Node " + entry.getKey());
-
-                if(nextHops.containsKey(entry.getKey()) && (entry.getKey() - nextHops.get(entry.getKey()) != 0)){
-                    System.out.println("; Next hop -> Node " + nextHops.get(entry.getKey()));
-                }
-                else{
-                    System.out.println("");
-                }
-            }
-        }
-        mutex.release();
 
         return needUpdate;
     }
@@ -360,7 +323,6 @@ public class ClientServer implements Runnable{
     public void send(String msg, InetAddress ipAddress, int port) throws Exception{
         DatagramPacket sendPacket;
         
-        //System.out.println("[ClientServer] send msg:" + msg);
         sendPacket = new DatagramPacket(msg.getBytes(), msg.getBytes().length, ipAddress, port);
         socket.send(sendPacket);
     }
@@ -384,22 +346,17 @@ public class ClientServer implements Runnable{
             Serial serial;
             Payload payload;
 
-            System.out.println("[ClientServer] Running " +  threadName);
             serial = new Serial();
             
             while(true){
                 //wait for 5 seconds
-                timeStamp = new Date();
-                System.out.print("[" + timeStamp.getTime() + "] ");
-                System.out.println("[ClientServer] wait for 5 sec...");
+                System.out.println("[ClientServer] wait for 5 sec............");
                 try {
                     Thread.sleep(5000);
                 } catch(InterruptedException ex) {
                     Thread.currentThread().interrupt();
                 }
                 
-                timeStamp = new Date();
-                System.out.print("[" + timeStamp.getTime() + "] ");
                 System.out.println("[ClientServer] wait for 5 sec complete..............");
                 
                 if(isNeighborsUpdate){
@@ -429,7 +386,6 @@ public class ClientServer implements Runnable{
         receivePacket = new DatagramPacket(receiveData, receiveData.length);
         socket.receive(receivePacket);
         msg = new String(receivePacket.getData());
-        System.out.println("[ClientServer] receive msg:" + msg);
         payload = serial.deserialize(msg);
 
         return payload;
@@ -468,23 +424,19 @@ public class ClientServer implements Runnable{
             needWaken = false;
 
             try{
-                System.out.println("[ClientServer] wait for packet...");
+                //System.out.println("[ClientServer] wait for packet...");
                 recPayload = receive();
             }
             catch(Exception e){
                 e.printStackTrace();  
             }
             
-            System.out.println("[ClientServer] type:" + recPayload.type);
+            //System.out.println("[ClientServer] type:" + recPayload.type);
             switch (recPayload.type){
                 case 0:
                     //update ackNum, window info
                     try{
                         synchronized(gThread){
-                            //System.out.println("[ClientServer] recPayload.seqNum: " + recPayload.seqNum);
-                            //System.out.println("[ClientServer] ackNum: " + ackNum);
-
-                            mutex.acquire();
                             if(recPayload.seqNum > ackNum){
                                 ackNum = recPayload.seqNum;
                                 windowStart = recPayload.seqNum + 1;
@@ -492,13 +444,7 @@ public class ClientServer implements Runnable{
                             }
                             windowEnd = windowStart + windowSize - 1;
                             ackCount++;
-                            mutex.release();
 
-                            //timeStamp = new Date();
-                            //System.out.print("[" + timeStamp.getTime() + "] ");
-                            //System.out.println("ACK" + recPayload.seqNum + " received, window moves to " + windowStart);
-                            
-                            //System.out.println("[ClientServer] waken...");
                             if(needWaken){
                                 gThread.notifyAll();
                             }
@@ -512,9 +458,6 @@ public class ClientServer implements Runnable{
                 case 1:
                     //send ack# and update expecting packet#
                     if(isDrop(recPayload.port)){
-                        timeStamp = new Date();
-                        //System.out.print("[" + timeStamp.getTime() + "] ");
-                        //System.out.println("packet" + recPayload.seqNum + " " + recPayload.data + " discarded");
                         break;
                     }
 
@@ -522,9 +465,6 @@ public class ClientServer implements Runnable{
                         expectPkts.put(recPayload.port, expectPkts.get(recPayload.port) + 1);
                     }
 
-                    timeStamp = new Date();
-                    //System.out.print("[" + timeStamp.getTime() + "] ");
-                    //System.out.println("packet" + recPayload.seqNum + " " + recPayload.data + " received");
                     sendPayload = new Payload();
                     sendPayload.type = 0;
                     sendPayload.port = selfPort;
@@ -533,9 +473,6 @@ public class ClientServer implements Runnable{
                      
                     try{
                         ipAddress = InetAddress.getByName("localhost");
-                        timeStamp = new Date();
-                        //System.out.print("[" + timeStamp.getTime() + "] ");
-                        //System.out.println("ACK" + sendPayload.seqNum + " sent, expecting packet" + expectPkts.get(recPayload.port));
                         send(msg, ipAddress, recPayload.port);
                     }
                     catch(Exception e){
