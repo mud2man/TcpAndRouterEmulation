@@ -91,6 +91,7 @@ public class ClientServer{
                 try{
                     //System.out.println("[ClientServer] wait for packet...");
                     recPayload = receive();
+                    mutex.acquire();
                 }
                 catch(Exception e){
                     e.printStackTrace();  
@@ -111,14 +112,12 @@ public class ClientServer{
                                     System.out.println("ACK" + recPayload.seqNum + " discarded");
                                     break;
                                 }
-                                mutex.acquire();
                                 if(recPayload.seqNum > ackNum){
                                     ackNum = recPayload.seqNum;
                                     windowStart = recPayload.seqNum + 1;
                                     needWaken = true;
                                 }
                                 windowEnd = windowStart + windowSize - 1;
-                                mutex.release();
                                 timeStamp = new Date();
                                 System.out.print("[" + timeStamp.getTime() + "] ");
                                 System.out.println("ACK" + recPayload.seqNum + " received, window moves to " + windowStart);
@@ -187,6 +186,7 @@ public class ClientServer{
                     default:
                         break;
                 }
+                mutex.release();
             }
         }
        
