@@ -179,8 +179,9 @@ public class ClientServer{
                         expectPkt = 0;
                         ++recvCount;
                         lossRate = (double)dropCount/(double)recvCount;
+                        lossRate = Math.round (lossRate * 1000.0) / 1000.0;
                         System.out.print("[Summery] " + dropCount + "/" + recvCount);
-                        System.out.println(" packets dropped, loss rate = " + (lossRate * 100) + "%");
+                        System.out.println(" packets dropped, loss rate = " + lossRate);
                         break;    
                     
                     default:
@@ -294,8 +295,9 @@ public class ClientServer{
         
         //display loss rate
         lossRate =  (double)discardAckCount/(double)recvAckCount;
+        lossRate = Math.round (lossRate * 1000.0) / 1000.0;
         System.out.print("[Summery] " + discardAckCount + "/" + recvAckCount);
-        System.out.println(" packets discarded, loss rate = " + (lossRate * 100) + "%");
+        System.out.println(" packets discarded, loss rate = " + lossRate);
         this.recvAckCount = 0;
         this.discardAckCount = 0;
     }

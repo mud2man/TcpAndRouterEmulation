@@ -1,7 +1,8 @@
 Name: Chih-Hung.Lu 
 UNI: cl3519
 
-I seperated this assignment as three parts and put them into three folders, GobackN, DistanceVectorRouting and Combination  
+I seperated this assignment as three parts and put them into three folders, GobackN, DistanceVectorRouting and Combination. 
+Note: If the first packet lost, the receiver will send ACK# = -1 to sender
 
 1. How to compile
     1.a For Go-Back-N Protocol, go into "GoBackN" folder do "$: make"
