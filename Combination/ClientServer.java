@@ -305,9 +305,10 @@ public class ClientServer implements Runnable{
                     needUpdate = true;
                 }
             }
-           
+          
             //display the routing table 
             if(needUpdate == true){
+                //dump();
                 timeStamp = new Date();
                 System.out.print("[" + timeStamp.getTime() + "] ");
                 System.out.println("Node " + selfPort + " Routing Table");
@@ -372,7 +373,7 @@ public class ClientServer implements Runnable{
                 
                 if(isNeighborsUpdate){
                     //dump();
-                    routingTableReset();
+                    //routingTableReset();
                     broadcastThread = new BroadcastThread("Broadcast vectors on node " + Integer.toString(selfPort));
                     broadcastThread.start();
                     isNeighborsUpdate = false;
