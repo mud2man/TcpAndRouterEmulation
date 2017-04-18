@@ -158,21 +158,23 @@ public class ClientServer implements Runnable{
             //System.out.println("[ClientServer] Running " +  threadName);
             serial = new Serial();
             
-            for(Map.Entry<Integer, Double> entry : neighbors.entrySet()) {
-    	        neighborPort = entry.getKey();
-                payload = new Payload();
-                payload.type = 3;
-                payload.port = selfPort;
-                payload.distanceVector = distanceVector; 
-                serialMsg = serial.serialize(payload);
-                try{
-                    ipAddress = InetAddress.getByName("localhost");
-                    send(serialMsg, ipAddress, neighborPort);
-                }
-                catch(Exception e){
-                    e.printStackTrace();  
-                }
-            } 
+            synchronized(lock){
+                for(Map.Entry<Integer, Double> entry : neighbors.entrySet()) {
+    	            neighborPort = entry.getKey();
+                    payload = new Payload();
+                    payload.type = 3;
+                    payload.port = selfPort;
+                    payload.distanceVector = distanceVector; 
+                    serialMsg = serial.serialize(payload);
+                    try{
+                        ipAddress = InetAddress.getByName("localhost");
+                        send(serialMsg, ipAddress, neighborPort);
+                    }
+                    catch(Exception e){
+                        e.printStackTrace();  
+                    }
+                } 
+            }
         }
        
         public void start () {
@@ -313,15 +315,6 @@ public class ClientServer implements Runnable{
                 }
             }
            
-            /*
-            if(distanceVector.containsKey(destination)){
-                distanceVector.put(destination, minDistance);
-                System.out.println("neighbors.get(3333): " + neighbors.get(3333));
-                System.out.println("minDistance: " + minDistance);
-                System.out.println("distanceVector.get(destination): " + distanceVector.get(destination));
-            }
-            */
-
             if(!distanceVector.containsKey(destination) || distanceVector.get(destination) != minDistance){
                 if(minDistance != Double.MAX_VALUE){
                     distanceVector.put(destination, minDistance);
@@ -339,7 +332,6 @@ public class ClientServer implements Runnable{
         
         //display the routing table 
         if(needUpdate == true){
-            //dump();
             timeStamp = new Date();
             System.out.print("[" + timeStamp.getTime() + "] ");
             System.out.println("Node " + selfPort + " Routing Table");
@@ -403,18 +395,11 @@ public class ClientServer implements Runnable{
                 
                 synchronized(lock){
                     //routingTableUpdate(selfPort, distanceVector);
-                    broadcastThread = new BroadcastThread("Broadcast vectors on node " + Integer.toString(selfPort));
-                    broadcastThread.start();
-                }
-                /*
-                if(isNeighborsUpdate){
                     //dump();
-                    //routingTableReset();
-                    broadcastThread = new BroadcastThread("Broadcast vectors on node " + Integer.toString(selfPort));
-                    broadcastThread.start();
-                    isNeighborsUpdate = false;
                 }
-                */
+
+                broadcastThread = new BroadcastThread("Broadcast vectors on node " + Integer.toString(selfPort));
+                broadcastThread.start();
             }
         }
        
