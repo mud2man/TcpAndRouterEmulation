@@ -112,7 +112,20 @@ public class ClientServer implements Runnable{
             }
         }
     }
- 
+    
+    public void dumpNeighbor(){
+        HashMap<Integer, Double> tmpDistanceVector;
+        int neighborPort;
+        double distance;
+
+        System.out.println("[dump] neighbors:");
+        for(Map.Entry<Integer, Double> entry : neighbors.entrySet()) {
+    	    neighborPort = entry.getKey();
+            distance = entry.getValue();
+            System.out.println("<" + neighborPort + ", " + distance + ">");
+        }
+    }
+
     public boolean isDrop(int neighborPort){
         double random;
         
@@ -207,7 +220,8 @@ public class ClientServer implements Runnable{
                                    (double)linkStatuss.get(port).sendCount;
                         lossRate = Math.round (lossRate * 100.0) / 100.0;
                         neighbors.put(port, lossRate);
-                        isNeighborsUpdate = true;
+                        routingTableReset();
+                        //isNeighborsUpdate = true;
                         payload.distance = lossRate;
                         serialMsg = serial.serialize(payload);
                         ipAddress = InetAddress.getByName("localhost");
@@ -250,7 +264,7 @@ public class ClientServer implements Runnable{
             //probedistance
             for(Integer port : probeSnedees) {
                 try{
-                    tcpSend("probeTest", port);
+                    tcpSend("probeTestLen", port);
                 }
                 catch(Exception e){
                     e.printStackTrace();  
@@ -262,69 +276,85 @@ public class ClientServer implements Runnable{
             thread.start ();
         }
     }
-    
+
+    //use syncronized(lock) when call this API
     public boolean routingTableUpdate(int neighborPort, HashMap<Integer, Double> neighborDistanceVector){
         boolean needUpdate;
         int destination, nextHop;
         double minDistance, currDistance;
     
         needUpdate = false;
-        nextHop = 0;
         
-        synchronized(lock){
-            if(neighborPort != selfPort){  
-                neighborDistanceVectors.put(neighborPort, neighborDistanceVector);
+        if(neighborPort != selfPort){  
+            neighborDistanceVectors.put(neighborPort, neighborDistanceVector);
+        }
+        
+        //Bellman-Ford
+        for(Map.Entry<Integer, Double> entry : neighborDistanceVector.entrySet()){
+            destination = entry.getKey();
+        
+            if(destination == selfPort){
+                continue;
             }
-            
-            //Bellman-Ford
-            for(Map.Entry<Integer, Double> entry : neighborDistanceVector.entrySet()){
-                destination = entry.getKey();
-         
-                if(destination == selfPort){
-                    continue;
-                }
-         
-                minDistance = Double.MAX_VALUE;
-                //scan all the neighbors to get minimum distance
-                for(Map.Entry<Integer, Double> neighbor : neighbors.entrySet()){
-                    neighborPort = neighbor.getKey();
-                    if(neighborDistanceVectors.containsKey(neighborPort) && 
-                       neighborDistanceVectors.get(neighborPort).containsKey(destination)){
-                        currDistance = neighbors.get(neighborPort) + neighborDistanceVectors.get(neighborPort).get(destination);
-                        currDistance = Math.round (currDistance * 100.0) / 100.0;
-                        if(currDistance < minDistance){
-                            minDistance = currDistance;
-                            nextHop = neighborPort;
-                        }
+        
+            nextHop = 0;
+            minDistance = Double.MAX_VALUE;
+            //scan all the neighbors to get minimum distance
+            for(Map.Entry<Integer, Double> neighbor : neighbors.entrySet()){
+                neighborPort = neighbor.getKey();
+                if(neighborDistanceVectors.containsKey(neighborPort) && 
+                   neighborDistanceVectors.get(neighborPort).containsKey(destination)){
+                    currDistance = neighbors.get(neighborPort) + neighborDistanceVectors.get(neighborPort).get(destination);
+                    currDistance = Math.round (currDistance * 100.0) / 100.0;
+                    if(currDistance < minDistance){
+                        minDistance = currDistance;
+                        nextHop = neighborPort;
                     }
                 }
-                
-                if(!distanceVector.containsKey(destination) || distanceVector.get(destination) != minDistance){
+            }
+           
+            /*
+            if(distanceVector.containsKey(destination)){
+                distanceVector.put(destination, minDistance);
+                System.out.println("neighbors.get(3333): " + neighbors.get(3333));
+                System.out.println("minDistance: " + minDistance);
+                System.out.println("distanceVector.get(destination): " + distanceVector.get(destination));
+            }
+            */
+
+            if(!distanceVector.containsKey(destination) || distanceVector.get(destination) != minDistance){
+                if(minDistance != Double.MAX_VALUE){
                     distanceVector.put(destination, minDistance);
+                    needUpdate = true;
+                }
+            }
+            
+            if(!nextHops.containsKey(destination) || nextHops.get(destination) != nextHop){
+                if(nextHop != 0){
                     nextHops.put(destination, nextHop);
                     needUpdate = true;
                 }
             }
-          
-            //display the routing table 
-            if(needUpdate == true){
-                //dump();
-                timeStamp = new Date();
-                System.out.print("[" + timeStamp.getTime() + "] ");
-                System.out.println("Node " + selfPort + " Routing Table");
-                for(Map.Entry<Integer, Double> entry : distanceVector.entrySet()){
-                    if(entry.getKey() == selfPort){
-                        continue;
-                    }
-         
-                    System.out.print("(" + entry.getValue() + ")" + " -> Node " + entry.getKey());
-         
-                    if(nextHops.containsKey(entry.getKey()) && (entry.getKey() - nextHops.get(entry.getKey()) != 0)){
-                        System.out.println("; Next hop -> Node " + nextHops.get(entry.getKey()));
-                    }
-                    else{
-                        System.out.println("");
-                    }
+        }
+        
+        //display the routing table 
+        if(needUpdate == true){
+            //dump();
+            timeStamp = new Date();
+            System.out.print("[" + timeStamp.getTime() + "] ");
+            System.out.println("Node " + selfPort + " Routing Table");
+            for(Map.Entry<Integer, Double> entry : distanceVector.entrySet()){
+                if(entry.getKey() == selfPort){
+                    continue;
+                }
+        
+                System.out.print("(" + entry.getValue() + ")" + " -> Node " + entry.getKey());
+        
+                if(nextHops.containsKey(entry.getKey()) && (entry.getKey() - nextHops.get(entry.getKey()) != 0)){
+                    System.out.println("; Next hop -> Node " + nextHops.get(entry.getKey()));
+                }
+                else{
+                    System.out.println("");
                 }
             }
         }
@@ -371,6 +401,12 @@ public class ClientServer implements Runnable{
                 
                 //System.out.println("[ClientServer] wait for 5 sec complete..............");
                 
+                synchronized(lock){
+                    //routingTableUpdate(selfPort, distanceVector);
+                    broadcastThread = new BroadcastThread("Broadcast vectors on node " + Integer.toString(selfPort));
+                    broadcastThread.start();
+                }
+                /*
                 if(isNeighborsUpdate){
                     //dump();
                     //routingTableReset();
@@ -378,6 +414,7 @@ public class ClientServer implements Runnable{
                     broadcastThread.start();
                     isNeighborsUpdate = false;
                 }
+                */
             }
         }
        
@@ -543,15 +580,22 @@ public class ClientServer implements Runnable{
                     //receive distance caculated by probe sender
     	            neighborPort = recPayload.port;
                     distance = recPayload.distance;
-                    neighbors.put(neighborPort, distance);
-                    isNeighborsUpdate = true;
+
+                    synchronized(lock){
+                        neighbors.put(neighborPort, distance);
+                        routingTableReset();
+                    }
+
+                    //isNeighborsUpdate = true;
                     break;    
                 
                 case 3:
                     //receive distance vector
-                    if(routingTableUpdate(recPayload.port, recPayload.distanceVector)){
-                        broadcastThread = new BroadcastThread("Broadcast vectors on node " + Integer.toString(this.selfPort));
-                        broadcastThread.start();
+                    synchronized(lock){
+                        if(routingTableUpdate(recPayload.port, recPayload.distanceVector)){
+                            broadcastThread = new BroadcastThread("Broadcast vectors on node " + Integer.toString(this.selfPort));
+                            broadcastThread.start();
+                        }
                     }
                     
                     if(!isCaculated){
