@@ -201,8 +201,6 @@ public class ClientServer implements Runnable{
             double lossRate;
             String serialMsg;
  
-            linkStatuss.get(port).sendCount = 0;
-            linkStatuss.get(port).ackCount = 0;
             ackNum = 0;
             windowStart = 0;
             windowEnd = windowStart + windowSize - 1;
@@ -264,12 +262,19 @@ public class ClientServer implements Runnable{
             isCaculated = true;
             
             //probedistance
-            for(Integer port : probeSnedees) {
-                try{
-                    tcpSend("probeTestLen", port);
+            while(true){
+                for(Integer port : probeSnedees) {
+                    try{
+                        tcpSend("probeTestLen", port);
+                    }
+                    catch(Exception e){
+                        e.printStackTrace();  
+                    }
                 }
-                catch(Exception e){
-                    e.printStackTrace();  
+                try {
+                    Thread.sleep(5000);
+                } catch(InterruptedException ex) {
+                    Thread.currentThread().interrupt();
                 }
             }
         }
